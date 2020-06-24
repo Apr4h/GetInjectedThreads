@@ -7,7 +7,7 @@ namespace GetInjectedThreads
 {
     enum TOKEN_INFORMATION_CLASS
     {
-        TokenUser,
+        TokenUser = 1,
         TokenGroups,
         TokenPrivileges,
         TokenOwner,

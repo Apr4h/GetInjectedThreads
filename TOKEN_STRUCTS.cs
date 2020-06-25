@@ -7,6 +7,7 @@ namespace GetInjectedThreads
     // Token Structs reference
     // https://docs.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-gettokeninformation
 
+
     [StructLayout(LayoutKind.Sequential)]
     struct TOKEN_USER
     {
@@ -44,7 +45,6 @@ namespace GetInjectedThreads
 
     }
 
-    [Flags()]
     enum TokenAccessFlags : int
     {
         STANDARD_RIGHTS_REQUIRED = 0x000F0000,

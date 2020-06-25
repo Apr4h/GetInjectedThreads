@@ -5,7 +5,7 @@ using System.Text;
 
 namespace GetInjectedThreads
 {
-    public enum ProcessAccess
+    public enum ProcessAccessFlags
     {
         All = 0x001F0FFF,
         Terminate = 0x00000001,

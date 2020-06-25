@@ -32,5 +32,7 @@ namespace GetInjectedThreads
         public IntPtr BaseAddress { get; set; }
         public int Size { get; set; }
         public byte[] Bytes { get; set; }
+
+        public DateTime ThreadStartTime { get; set; }
     }
 }

@@ -5,7 +5,6 @@ using System.Text;
 
 namespace GetInjectedThreads
 {
-    [Flags]
     public enum ThreadAccess : int
     {
         Terminate = 0x0001,

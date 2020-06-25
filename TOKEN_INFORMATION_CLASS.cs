@@ -5,6 +5,7 @@ using System.Text;
 
 namespace GetInjectedThreads
 {
+    // https://docs.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-token_information_class
     enum TOKEN_INFORMATION_CLASS
     {
         TokenUser = 1,

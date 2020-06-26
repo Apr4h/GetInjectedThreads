@@ -43,7 +43,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="InjectedThread.cs" />
+    <Compile Include="LUID_ATTRIBUTES.cs" />
     <Compile Include="MEMORY_BASIC_INFORMATION.cs" />
+    <Compile Include="PRIVILEGE_CONSTANTS.cs" />
     <Compile Include="PROCESS_ACCESS.cs" />
     <Compile Include="THREAD_ACCESS.cs" />
     <Compile Include="TOKEN_INFORMATION_CLASS.cs" />

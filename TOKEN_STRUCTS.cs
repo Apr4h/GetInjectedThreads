@@ -6,31 +6,41 @@ namespace GetInjectedThreads
 {
     // Token Structs reference
     // https://docs.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-gettokeninformation
-
+    // Privilege Constants
+    // 
 
     [StructLayout(LayoutKind.Sequential)]
     struct TOKEN_USER
     {
-        public _SID_AND_ATTRIBUTES User;
+        public SID_AND_ATTRIBUTES User;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct _SID_AND_ATTRIBUTES
+    public struct SID_AND_ATTRIBUTES
     {
         public IntPtr Sid;
         public int Attributes;
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public struct TOKEN_PRIVILEGES
+    {
+        public Int32 PrivilegeCount;
+        public LUID_AND_ATTRIBUTES[] Privileges;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct LUID
     {
-
+        public PRIVILEGE_CONSTANT LowPart;
+        public Int32 HighPart;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct LUID_AND_ATTRIBUTES
     {
-
+        public LUID Luid;
+        public UInt32 Attributes;
     }
 
     [StructLayout(LayoutKind.Sequential)]

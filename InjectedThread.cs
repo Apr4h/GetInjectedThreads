@@ -22,7 +22,7 @@ namespace GetInjectedThreads
         public int BasePriority { get; set; }
         public bool IsUniqueThreadToken { get; set; }
         public string Integrity { get; set; }
-        public string Privilege { get; set; }
+        public string Privileges { get; set; }
         public int LogonId { get; set; }
         public string SecurityIdentifier { get; set; }
         public string Username { get; set; }

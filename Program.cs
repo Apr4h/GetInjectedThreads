@@ -15,18 +15,6 @@ namespace GetInjectedThreads
     class Program
     {
         //https://docs.microsoft.com/en-au/windows/win32/api/winnt/ns-winnt-memory_basic_information?redirectedfrom=MSDN
-        //https://www.codeproject.com/articles/716227/csharp-how-to-scan-a-process-memory
-
-
-        // Constants
-        const int PROCESS_QUERY_INFORMATION = 0x0400;
-        const int THREAD_ALL_ACCESS = 0x001f0ffb;
-        const int PROCESS_ALL_ACCESS = 0x001f1ffb;
-        const int TOKEN_QUERY = 0x0008;
-        const int TOKEN_READ = 0x000a;
-        const int PROCESS_WM_READ = 0x0010;
-        const int MEM_COMMIT = 0x00001000;
-        const int MEM_IMAGE = 0x1000000;
 
         // Required Interop functions
         [DllImport("shell32.dll", SetLastError = true)]
@@ -56,6 +44,9 @@ namespace GetInjectedThreads
 
         [DllImport("ntdll.dll", SetLastError = true)]
         static extern int NtQueryInformationThread(IntPtr threadHandle, ThreadInfoClass threadInformationClass, IntPtr threadInformation, int threadInformationLength, IntPtr returnLengthPtr);
+
+        [DllImport("advapi32", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern Boolean ConvertSidToStringSid(IntPtr pSID, out IntPtr ptrSid);
 
         [HandleProcessCorruptedStateExceptions]
         static void Main(string[] args)
@@ -165,9 +156,18 @@ namespace GetInjectedThreads
                                     injectedThread.IsUniqueThreadToken = true;
                                 }
 
+                                /* GetTokenInformation
+                                * SID              TokenUser           (1)
+                                * Privileges       TokenPrivileges     (3)
+                                * LogonSession     TokenOrigin         (17)
+                                * Integrity        TokenIntegrityLevel (25)
+                                */
 
-                               
+                                injectedThread.SecurityIdentifier = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenUser);
+                                injectedThread.Privileges = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges);
+                                injectedThread.Integrity = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenIntegrityLevel);
 
+                                // LogonSession = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin)
                             }
                         }
                     }
@@ -205,6 +205,12 @@ namespace GetInjectedThreads
         }
 
 
+        /// <summary>
+        /// Extracts Token information from a thread's memory by wrapping GetTokenInformation(). Returns token information specified by the TOKEN_INFORMATION_CLASS tokenInformationClass param
+        /// </summary>
+        /// <param name="hToken"></param>
+        /// <param name="tokenInformationClass"></param>
+        /// <returns>String containing the requested token information</returns>
         static string QueryToken(IntPtr hToken, TOKEN_INFORMATION_CLASS tokenInformationClass)
         {
             /* GetTokenInformation
@@ -219,13 +225,65 @@ namespace GetInjectedThreads
 
             // First need to get the length of TokenInformation
             result = GetTokenInformation(hToken, tokenInformationClass, IntPtr.Zero, tokenInformationLength, out tokenInformationLength);
+            // Buffer for the struct
+            IntPtr tokenInformation = Marshal.AllocHGlobal(tokenInformationLength);
 
-            switch (tokenInformationClass)
+            if (result)
             {
-                case TOKEN_INFORMATION_CLASS.TokenUser:
+                // Make call to GetTokenInformation() and get particular Struct 
+                switch (tokenInformationClass)
+                {
+                    case TOKEN_INFORMATION_CLASS.TokenUser:
+                        
+                        // Store the requested token information in the buffer
+                        result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenUser, tokenInformation, tokenInformationLength, out tokenInformationLength);
 
-                    IntPtr tokenInformation = Marshal.AllocHGlobal(tokenInformationLength);
-                    
+                        if(result)
+                        {
+                            // Marshal the buffer to TOKEN_USER Struct
+                            TOKEN_USER tokenUser = (TOKEN_USER)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_USER));
+
+                            // Extract SID from the TOKEN_USER struct
+                            IntPtr pSID = IntPtr.Zero;
+                            result = ConvertSidToStringSid(tokenUser.User.Sid, out pSID);
+                            string SID = Marshal.PtrToStringAuto(pSID);
+
+                            return SID;
+                        }
+                        else
+                        {
+                            return null;
+                        }
+
+                    case TOKEN_INFORMATION_CLASS.TokenPrivileges:
+
+                        result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges, tokenInformation, tokenInformationLength, out tokenInformationLength);
+
+                        if(result)
+                        {
+                            TOKEN_PRIVILEGES tokenPrivileges = (TOKEN_PRIVILEGES)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_PRIVILEGES));
+
+                            StringBuilder stringBuilder = new StringBuilder();
+
+                            for (int i = 0; i < tokenPrivileges.PrivilegeCount; i++)
+                            {
+                                // Bitwise AND comparison to check that each token privilege attribute for SE_PRIVILEGE_ENABLED
+                                if(((LUID_ATTRIBUTES)tokenPrivileges.Privileges[i].Attributes & LUID_ATTRIBUTES.SE_PRIVILEGE_ENABLED) == LUID_ATTRIBUTES.SE_PRIVILEGE_ENABLED)
+                                {
+                                    // Append the privilege to the stringBuilder
+                                    stringBuilder.Append($", {tokenPrivileges.Privileges[i].Luid.LowPart.ToString()}");
+                                }
+                            }
+
+                            return stringBuilder.ToString().TrimStart(',');
+                        }
+                        else
+                        {
+                            return null;
+                        }
+
+                }
+
             }
             return "test";
         }

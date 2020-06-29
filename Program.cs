@@ -9,13 +9,14 @@ using System.Runtime.ExceptionServices;
 using System.Security.Principal;
 using System.Text;
 using System.Diagnostics.Eventing.Reader;
+using GetInjectedThreads.Enums;
+using GetInjectedThreads.Structs;
+
 
 namespace GetInjectedThreads
 {
     class Program
     {
-        //https://docs.microsoft.com/en-au/windows/win32/api/winnt/ns-winnt-memory_basic_information?redirectedfrom=MSDN
-
         // Required Interop functions
         [DllImport("shell32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -37,16 +38,22 @@ namespace GetInjectedThreads
         static extern Boolean OpenThreadToken(IntPtr ThreadHandle, TokenAccessFlags DesiredAccess, bool OpenAsSelf, out IntPtr TokenHandle);
 
         [DllImport("Advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        static extern Boolean OpenProcessToken(IntPtr ProcessHandle, ProcessAccessFlags DesiredAccess, out IntPtr TokenHandle);
+        static extern Boolean OpenProcessToken(IntPtr ProcessHandle, TokenAccessFlags DesiredAccess, out IntPtr TokenHandle);
 
-        [DllImport("Kernel32.dll")]
+        [DllImport("Advapi32.dll")]
         static extern bool GetTokenInformation(IntPtr TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, IntPtr TokenInformation, int TokenInformationLength, out int ReturnLength);
 
         [DllImport("ntdll.dll", SetLastError = true)]
         static extern int NtQueryInformationThread(IntPtr threadHandle, ThreadInfoClass threadInformationClass, IntPtr threadInformation, int threadInformationLength, IntPtr returnLengthPtr);
 
-        [DllImport("advapi32", CharSet = CharSet.Auto, SetLastError = true)]
-        static extern Boolean ConvertSidToStringSid(IntPtr pSID, out IntPtr ptrSid);
+        [DllImport("Advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern int ConvertSidToStringSid(IntPtr pSID, out IntPtr ptrSid);
+
+        [DllImport("Secur32.dll")]
+        static extern uint LsaGetLogonSessionData(IntPtr pLUID, out IntPtr ppLogonSessionData);
+
+        [DllImport("Secur32.dll")]
+        private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
 
         [HandleProcessCorruptedStateExceptions]
         static void Main(string[] args)
@@ -133,10 +140,8 @@ namespace GetInjectedThreads
                                 };
 
                                 // Get handle to thread token. If Impersonation is not being used, thread will use Process access token
-                                IntPtr hToken;
-
-                                // Try OpenThreadToken(), if it fails, use OpenProcessToken()
-                                if (OpenThreadToken(hThread, TokenAccessFlags.TOKEN_ALL_ACCESS, false, out hToken) == false)
+                                // Try OpenThreadToken() - if it fails, use OpenProcessToken()
+                                if (OpenThreadToken(hThread, TokenAccessFlags.TOKEN_QUERY, false, out IntPtr hToken) == false)
                                 {
                                     int error = Marshal.GetLastWin32Error();
                                     Console.WriteLine($"OpenThreadToken() Error: {error}\nThread ID {thread.Id}\nOpening Process Token instead...");
@@ -145,7 +150,7 @@ namespace GetInjectedThreads
                                     injectedThread.IsUniqueThreadToken = false;
 
                                     // Open process token instead
-                                    if(OpenProcessToken(hProcess, ProcessAccessFlags.All, out hToken) == false)
+                                    if (OpenProcessToken(hProcess, TokenAccessFlags.TOKEN_QUERY, out hToken) == false)
                                     {
                                         error = Marshal.GetLastWin32Error();
                                         Console.WriteLine($"OpenProcessToken() Error: {error}\nProcess ID {process.Id}");
@@ -156,18 +161,17 @@ namespace GetInjectedThreads
                                     injectedThread.IsUniqueThreadToken = true;
                                 }
 
-                                /* GetTokenInformation
-                                * SID              TokenUser           (1)
-                                * Privileges       TokenPrivileges     (3)
-                                * LogonSession     TokenOrigin         (17)
-                                * Integrity        TokenIntegrityLevel (25)
-                                */
-
+                                // Query process or thread token information
                                 injectedThread.SecurityIdentifier = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenUser);
                                 injectedThread.Privileges = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges);
                                 injectedThread.Integrity = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenIntegrityLevel);
-
-                                // LogonSession = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin)
+                                injectedThread.LogonId = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin);
+    
+                                // Get logon session information and add it to the InjectedThread object
+                                if(!string.IsNullOrEmpty(injectedThread.LogonId))
+                                {
+                                    GetLogonSessionData(hToken, injectedThread);
+                                }
                             }
                         }
                     }
@@ -206,7 +210,7 @@ namespace GetInjectedThreads
 
 
         /// <summary>
-        /// Extracts Token information from a thread's memory by wrapping GetTokenInformation(). Returns token information specified by the TOKEN_INFORMATION_CLASS tokenInformationClass param
+        /// Extracts Token information from a thread's memory by wrapping GetTokenInformation(). Returns token information specified by the tokenInformationClass param
         /// </summary>
         /// <param name="hToken"></param>
         /// <param name="tokenInformationClass"></param>
@@ -221,71 +225,154 @@ namespace GetInjectedThreads
             */
 
             int tokenInformationLength = 0;
-            bool result;
 
-            // First need to get the length of TokenInformation
-            result = GetTokenInformation(hToken, tokenInformationClass, IntPtr.Zero, tokenInformationLength, out tokenInformationLength);
+            // First need to get the length of TokenInformation - won't return true
+            bool result = GetTokenInformation(hToken, tokenInformationClass, IntPtr.Zero, tokenInformationLength, out tokenInformationLength);
             // Buffer for the struct
             IntPtr tokenInformation = Marshal.AllocHGlobal(tokenInformationLength);
 
-            if (result)
+            // Make call to GetTokenInformation() and get particular Struct 
+            switch (tokenInformationClass)
             {
-                // Make call to GetTokenInformation() and get particular Struct 
-                switch (tokenInformationClass)
-                {
-                    case TOKEN_INFORMATION_CLASS.TokenUser:
+                case TOKEN_INFORMATION_CLASS.TokenUser:
+
+                    // Store the requested token information in the buffer
+                    result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenUser, tokenInformation, tokenInformationLength, out tokenInformationLength);
+
+                    if (result)
+                    {
+                        // Marshal the buffer to TOKEN_USER Struct
+                        TOKEN_USER tokenUser = (TOKEN_USER)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_USER));
+
+                        // Extract SID from the TOKEN_USER struct
+                        IntPtr pSID = IntPtr.Zero;
+                        ConvertSidToStringSid(tokenUser.User.Sid, out pSID);
+                        string SID = Marshal.PtrToStringAuto(pSID);
+
+                        return SID;
+                    }
+                    else { return null; }
                         
-                        // Store the requested token information in the buffer
-                        result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenUser, tokenInformation, tokenInformationLength, out tokenInformationLength);
+                case TOKEN_INFORMATION_CLASS.TokenPrivileges:
 
-                        if(result)
+                    result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges, tokenInformation, tokenInformationLength, out tokenInformationLength);
+
+                    if (result)
+                    {
+                        TOKEN_PRIVILEGES tokenPrivileges = (TOKEN_PRIVILEGES)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_PRIVILEGES));
+
+                        StringBuilder stringBuilder = new StringBuilder();
+
+                        for (int i = 0; i < tokenPrivileges.PrivilegeCount; i++)
                         {
-                            // Marshal the buffer to TOKEN_USER Struct
-                            TOKEN_USER tokenUser = (TOKEN_USER)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_USER));
-
-                            // Extract SID from the TOKEN_USER struct
-                            IntPtr pSID = IntPtr.Zero;
-                            result = ConvertSidToStringSid(tokenUser.User.Sid, out pSID);
-                            string SID = Marshal.PtrToStringAuto(pSID);
-
-                            return SID;
-                        }
-                        else
-                        {
-                            return null;
-                        }
-
-                    case TOKEN_INFORMATION_CLASS.TokenPrivileges:
-
-                        result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges, tokenInformation, tokenInformationLength, out tokenInformationLength);
-
-                        if(result)
-                        {
-                            TOKEN_PRIVILEGES tokenPrivileges = (TOKEN_PRIVILEGES)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_PRIVILEGES));
-
-                            StringBuilder stringBuilder = new StringBuilder();
-
-                            for (int i = 0; i < tokenPrivileges.PrivilegeCount; i++)
+                            // Bitwise AND comparison to check that each token privilege attribute for SE_PRIVILEGE_ENABLED
+                            if (((LUID_ATTRIBUTES)tokenPrivileges.Privileges[i].Attributes & LUID_ATTRIBUTES.SE_PRIVILEGE_ENABLED) == LUID_ATTRIBUTES.SE_PRIVILEGE_ENABLED)
                             {
-                                // Bitwise AND comparison to check that each token privilege attribute for SE_PRIVILEGE_ENABLED
-                                if(((LUID_ATTRIBUTES)tokenPrivileges.Privileges[i].Attributes & LUID_ATTRIBUTES.SE_PRIVILEGE_ENABLED) == LUID_ATTRIBUTES.SE_PRIVILEGE_ENABLED)
-                                {
-                                    // Append the privilege to the stringBuilder
-                                    stringBuilder.Append($", {tokenPrivileges.Privileges[i].Luid.LowPart.ToString()}");
-                                }
+                                // Append the privilege to the stringBuilder
+                                stringBuilder.Append($", {tokenPrivileges.Privileges[i].Luid.LowPart.ToString()}");
                             }
-
-                            return stringBuilder.ToString().TrimStart(',');
                         }
-                        else
+
+                        return stringBuilder.ToString().Remove(0, 2);
+                    }
+                    else { return null; }
+                
+                case TOKEN_INFORMATION_CLASS.TokenIntegrityLevel:
+
+                    // Mandatory Level SIDs for QueryToken()
+                    // https://support.microsoft.com/en-au/help/243330/well-known-security-identifiers-in-windows-operating-systems#allsids
+                    Dictionary<string, string> tokenIntegritySIDs = new Dictionary<string, string>
+                    {
+                        {"S-1-16-0", "Untrusted Mandatory Level"},
+                        {"S-1-16-4096", "Low Mandatory Level"},
+                        {"S-1-16-8192", "Medium Mandatory Level"},
+                        {"S-1-16-8448", "Medium Plus Mandatory Level"},
+                        {"S-1-16-12288", "High Mandatory Level"},
+                        {"S-1-16-16384", "System Mandatory Level"},
+                        {"S-1-16-20480", "Protected Process Mandatory Level"},
+                        {"S-1-16-28672", "Secure Process Mandatory Level"}
+                    };
+
+                    result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenIntegrityLevel, tokenInformation, tokenInformationLength, out tokenInformationLength);
+
+                    if(result)
+                    {
+                        TOKEN_MANDATORY_LABEL tokenMandatoryLabel = (TOKEN_MANDATORY_LABEL)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_MANDATORY_LABEL));
+
+                        // Extract SID string from TOKEN_MANDATORY_LABEL
+                        IntPtr pSID = IntPtr.Zero;
+                        ConvertSidToStringSid(tokenMandatoryLabel.label.Sid, out pSID);
+                        string SID = Marshal.PtrToStringAuto(pSID);
+
+                        if (tokenIntegritySIDs.ContainsKey(SID))
                         {
-                            return null;
+                            return tokenIntegritySIDs[SID];
                         }
+                        else { return null; }
+                    }
+                    else
+                    {
+                        return null;
+                    }
 
+                case TOKEN_INFORMATION_CLASS.TokenOrigin:
+
+                    result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin, tokenInformation, tokenInformationLength, out tokenInformationLength);
+
+                    if(result)
+                    {
+                        TOKEN_ORIGIN tokenOrigin = (TOKEN_ORIGIN)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_ORIGIN));
+                        string logonId = tokenOrigin.OriginatingLogonSession.LowPart.ToString();
+                        return logonId;
+                    }
+                    else { return null; }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Get SECURITY_LOGON_SESSION_DATA for a process or thread via a handle to its token and populate an InjectedThread object's Logon Session values
+        /// </summary>
+        /// <param name="hToken"></param>
+        /// <param name="injectedThread"></param>
+        static void GetLogonSessionData(IntPtr hToken, InjectedThread injectedThread)
+        {
+            int tokenInformationLength = 0;
+            bool result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin, IntPtr.Zero, tokenInformationLength, out tokenInformationLength);
+            IntPtr tokenInformation = Marshal.AllocHGlobal(tokenInformationLength);
+
+            result = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin, tokenInformation, tokenInformationLength, out tokenInformationLength);
+
+            if(result)
+            {
+                // GetTokenInformation to retreive LUID struct
+                TOKEN_ORIGIN tokenOrigin = (TOKEN_ORIGIN)Marshal.PtrToStructure(tokenInformation, typeof(TOKEN_ORIGIN));
+                IntPtr pLUID = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(LUID)));  
+                
+                // Get pointer to LUID struct for LsaGetLogonSessionData
+                Marshal.StructureToPtr(tokenOrigin.OriginatingLogonSession, pLUID, false);
+
+                IntPtr pLogonSessionData = IntPtr.Zero;
+                LsaGetLogonSessionData(pLUID, out pLogonSessionData);
+
+                SECURITY_LOGON_SESSION_DATA logonSessionData = (SECURITY_LOGON_SESSION_DATA)Marshal.PtrToStructure(pLogonSessionData, typeof(SECURITY_LOGON_SESSION_DATA));
+
+                // Check for a valid logon 
+                if(logonSessionData.PSiD != IntPtr.Zero)
+                {
+                    // Win32 systemdate
+                    DateTime systime = new DateTime(1601, 1, 1, 0, 0, 0, 0); 
+
+                    // Add logon session information to InjectedThread object
+                    string domain = Marshal.PtrToStringUni(logonSessionData.LoginDomain.buffer).Trim();
+                    string username = Marshal.PtrToStringUni(logonSessionData.Username.buffer).Trim();
+                    injectedThread.Username = $"{domain}\\{username}";
+                    injectedThread.LogonSessionStartTime = systime.AddTicks((long)logonSessionData.LoginTime);
+                    injectedThread.LogonType = Enum.GetName(typeof(SECURITY_LOGON_TYPES), logonSessionData.LogonType);  
+                    injectedThread.AuthenticationPackage = Marshal.PtrToStringAuto(logonSessionData.AuthenticationPackage.buffer);
                 }
 
             }
-            return "test";
         }
     }
 }

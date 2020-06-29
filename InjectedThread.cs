@@ -23,10 +23,10 @@ namespace GetInjectedThreads
         public bool IsUniqueThreadToken { get; set; }
         public string Integrity { get; set; }
         public string Privileges { get; set; }
-        public int LogonId { get; set; }
+        public string LogonId { get; set; }
         public string SecurityIdentifier { get; set; }
         public string Username { get; set; }
-        public string LogonSessionStartTime { get; set; }
+        public DateTime LogonSessionStartTime { get; set; }
         public string LogonType { get; set; }
         public string AuthenticationPackage { get; set; }
         public IntPtr BaseAddress { get; set; }

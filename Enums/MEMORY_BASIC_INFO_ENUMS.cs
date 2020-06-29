@@ -2,25 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Runtime.InteropServices;
 
-namespace GetInjectedThreads
+namespace GetInjectedThreads.Enums
 {
-    // MEMORY_BASIC_INFORMATION struct required for VirtualQueryEx - to read state and type fields
-    [StructLayout(LayoutKind.Sequential)]
-    public struct MEMORY_BASIC_INFORMATION64
-    {
-        public ulong BaseAddress;
-        public ulong AllocationBase;
-        public MemoryBasicInformationProtection AllocationProtect;
-        public int __alignment1;
-        public ulong RegionSize;
-        public MemoryBasicInformationState State;
-        public MemoryBasicInformationProtection Protect;
-        public MemoryBasicInformationType Type;
-        public int __alignment2;
-    }
-
     public enum MemoryBasicInformationState : uint
     {
         MEM_COMMIT = 0x1000,

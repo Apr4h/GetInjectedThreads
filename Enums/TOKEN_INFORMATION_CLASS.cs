@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace GetInjectedThreads
+namespace GetInjectedThreads.Enums
 {
     // https://docs.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-token_information_class
     enum TOKEN_INFORMATION_CLASS

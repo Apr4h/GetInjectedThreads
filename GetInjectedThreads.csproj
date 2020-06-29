@@ -42,16 +42,22 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Enums\SECURITY_LOGON_TYPES.cs" />
+    <Compile Include="Enums\MEMORY_BASIC_INFO_ENUMS.cs" />
+    <Compile Include="Enums\TOKEN_ACCESS_FLAGS.cs" />
     <Compile Include="InjectedThread.cs" />
-    <Compile Include="LUID_ATTRIBUTES.cs" />
-    <Compile Include="MEMORY_BASIC_INFORMATION.cs" />
-    <Compile Include="PRIVILEGE_CONSTANTS.cs" />
-    <Compile Include="PROCESS_ACCESS.cs" />
-    <Compile Include="THREAD_ACCESS.cs" />
-    <Compile Include="TOKEN_INFORMATION_CLASS.cs" />
+    <Compile Include="Enums\LUID_ATTRIBUTES.cs" />
+    <Compile Include="Structs\LSA_UNICODE_STRING.cs" />
+    <Compile Include="Structs\MEMORY_BASIC_INFORMATION.cs" />
+    <Compile Include="Enums\PRIVILEGE_CONSTANTS.cs" />
+    <Compile Include="Enums\PROCESS_ACCESS.cs" />
+    <Compile Include="Structs\SECURITY_LOGON_SESSION_DATA.cs" />
+    <Compile Include="Structs\THREAD_ACCESS.cs" />
+    <Compile Include="Enums\TOKEN_INFORMATION_CLASS.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="TOKEN_STRUCTS.cs" />
+    <Compile Include="Structs\TOKEN_STRUCTS.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

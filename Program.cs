@@ -142,18 +142,14 @@ namespace GetInjectedThreads
                                 // Get handle to thread token. If Impersonation is not being used, thread will use Process access token
                                 // Try OpenThreadToken() - if it fails, use OpenProcessToken()
                                 if (OpenThreadToken(hThread, TokenAccessFlags.TOKEN_QUERY, false, out IntPtr hToken) == false)
-                                {
-                                    int error = Marshal.GetLastWin32Error();
-                                    Console.WriteLine($"OpenThreadToken() Error: {error}\nThread ID {thread.Id}\nOpening Process Token instead...");
-
+                                {                                  
                                     // Thread doesn't have a unique token
                                     injectedThread.IsUniqueThreadToken = false;
 
                                     // Open process token instead
                                     if (OpenProcessToken(hProcess, TokenAccessFlags.TOKEN_QUERY, out hToken) == false)
                                     {
-                                        error = Marshal.GetLastWin32Error();
-                                        Console.WriteLine($"OpenProcessToken() Error: {error}\nProcess ID {process.Id}");
+                                        Console.WriteLine($"Error opening thread and process token: {Marshal.GetLastWin32Error()}\nProcess ID {process.Id}");
                                     }
                                 }
                                 else
@@ -360,18 +356,16 @@ namespace GetInjectedThreads
                 // Check for a valid logon 
                 if(logonSessionData.PSiD != IntPtr.Zero)
                 {
-                    // Win32 systemdate
-                    DateTime systime = new DateTime(1601, 1, 1, 0, 0, 0, 0); 
-
                     // Add logon session information to InjectedThread object
                     string domain = Marshal.PtrToStringUni(logonSessionData.LoginDomain.buffer).Trim();
                     string username = Marshal.PtrToStringUni(logonSessionData.Username.buffer).Trim();
                     injectedThread.Username = $"{domain}\\{username}";
-                    injectedThread.LogonSessionStartTime = systime.AddTicks((long)logonSessionData.LoginTime);
+                    injectedThread.LogonSessionStartTime = DateTime.FromFileTime(logonSessionData.LoginTime);
                     injectedThread.LogonType = Enum.GetName(typeof(SECURITY_LOGON_TYPES), logonSessionData.LogonType);  
                     injectedThread.AuthenticationPackage = Marshal.PtrToStringAuto(logonSessionData.AuthenticationPackage.buffer);
                 }
 
+                LsaFreeReturnBuffer(pLogonSessionData);
             }
         }
     }

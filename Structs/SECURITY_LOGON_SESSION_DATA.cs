@@ -16,7 +16,7 @@ namespace GetInjectedThreads.Structs
         public UInt32 LogonType;
         public UInt32 Session;
         public IntPtr PSiD;
-        public UInt64 LoginTime;
+        public Int64 LoginTime;
         public LSA_UNICODE_STRING LogonServer;
         public LSA_UNICODE_STRING DnsDomainName;
         public LSA_UNICODE_STRING Upn;

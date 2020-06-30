@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using GetInjectedThreads.Enums;
+﻿using GetInjectedThreads.Enums;
+using System;
 
 
-namespace GetInjectedThreads
+namespace GetInjectedThreads.Structs
 {
     // MEMORY_BASIC_INFORMATION struct required for VirtualQueryEx - to read state and type fields
     // https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information
@@ -15,7 +13,7 @@ namespace GetInjectedThreads
         public ulong AllocationBase;
         public MemoryBasicInformationProtection AllocationProtect;
         public int __alignment1;
-        public ulong RegionSize;
+        public UIntPtr RegionSize;
         public MemoryBasicInformationState State;
         public MemoryBasicInformationProtection Protect;
         public MemoryBasicInformationType Type;

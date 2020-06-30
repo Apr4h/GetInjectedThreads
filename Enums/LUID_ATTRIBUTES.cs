@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace GetInjectedThreads.Enums
 {
-   public enum LUID_ATTRIBUTES : UInt32
+    public enum LUID_ATTRIBUTES : UInt32
     {
         DISABLED = 0x00000000,
         SE_PRIVILEGE_ENABLED_BY_DEFAULT = 0x00000001,

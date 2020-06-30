@@ -1,6 +1,6 @@
-﻿using System;
+﻿using GetInjectedThreads.Enums;
+using System;
 using System.Runtime.InteropServices;
-using GetInjectedThreads.Enums;
 
 
 namespace GetInjectedThreads.Structs

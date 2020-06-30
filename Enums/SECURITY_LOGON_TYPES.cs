@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace GetInjectedThreads.Enums
+﻿namespace GetInjectedThreads.Enums
 {
     // https://docs.microsoft.com/en-us/windows/win32/api/ntsecapi/ne-ntsecapi-security_logon_type
     public enum SECURITY_LOGON_TYPES

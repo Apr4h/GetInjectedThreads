@@ -1,16 +1,12 @@
-﻿using System;
+﻿using GetInjectedThreads.Enums;
+using GetInjectedThreads.Structs;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Management;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Runtime.ExceptionServices;
-using System.Security.Principal;
+using System.Runtime.InteropServices;
 using System.Text;
-using System.Diagnostics.Eventing.Reader;
-using GetInjectedThreads.Enums;
-using GetInjectedThreads.Structs;
 
 
 namespace GetInjectedThreads
@@ -26,7 +22,7 @@ namespace GetInjectedThreads
         public static extern IntPtr OpenProcess(ProcessAccessFlags processAccess, bool bInheritHandle, int processId);
 
         [DllImport("kernel32.dll")]
-        public static extern bool ReadProcessMemory(int hProcess, int lpBaseAddress, byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
+        public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern int VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION64 lpBuffer, uint dwLength);
@@ -130,6 +126,7 @@ namespace GetInjectedThreads
                                     ThreadId = thread.Id,
                                     BaseAddress = threadBaseAddress,
                                     Path = process.MainModule.FileName,
+                                    Size = (int)memBasicInfo.RegionSize,
                                     CommandLine = GetProcessCommandLine(process),
                                     MemoryState = Enum.GetName(typeof(MemoryBasicInformationState), memBasicInfo.State),
                                     MemoryType = Enum.GetName(typeof(MemoryBasicInformationType), memBasicInfo.Type),
@@ -162,12 +159,26 @@ namespace GetInjectedThreads
                                 injectedThread.Privileges = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges);
                                 injectedThread.Integrity = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenIntegrityLevel);
                                 injectedThread.LogonId = QueryToken(hToken, TOKEN_INFORMATION_CLASS.TokenOrigin);
-    
+                                injectedThread.Username = GetProcessOwner(process.Id);
+
                                 // Get logon session information and add it to the InjectedThread object
-                                if(!string.IsNullOrEmpty(injectedThread.LogonId))
+                                if (!string.IsNullOrEmpty(injectedThread.LogonId))
                                 {
                                     GetLogonSessionData(hToken, injectedThread);
                                 }
+
+                                // Read memory from the thread's address space into a byte array
+                                byte[] buffer = new byte[(int)memBasicInfo.RegionSize];
+                                int numberOfBytesRead = 0;
+                                ReadProcessMemory(hProcess, threadBaseAddress, buffer, (int)memBasicInfo.RegionSize, ref numberOfBytesRead);
+
+                                if(numberOfBytesRead > 0)
+                                {
+                                    injectedThread.Bytes = buffer;;
+                                }
+
+                                injectedThreads.Add(injectedThread);
+
                             }
                         }
                     }
@@ -213,13 +224,6 @@ namespace GetInjectedThreads
         /// <returns>String containing the requested token information</returns>
         static string QueryToken(IntPtr hToken, TOKEN_INFORMATION_CLASS tokenInformationClass)
         {
-            /* GetTokenInformation
-            * SID              TokenUser           (1)
-            * Privileges       TokenPrivileges     (3)
-            * LogonSession     TokenOrigin         (17)
-            * Integrity        TokenIntegrityLevel (25)
-            */
-
             int tokenInformationLength = 0;
 
             // First need to get the length of TokenInformation - won't return true
@@ -356,10 +360,14 @@ namespace GetInjectedThreads
                 // Check for a valid logon 
                 if(logonSessionData.PSiD != IntPtr.Zero)
                 {
+                    if(injectedThread.Username.Equals("NO OWNER"))
+                    {
+                        string domain = Marshal.PtrToStringUni(logonSessionData.LoginDomain.buffer).Trim();
+                        string username = Marshal.PtrToStringUni(logonSessionData.Username.buffer).Trim();
+                        injectedThread.Username = $"{domain}\\{username}";
+                    }
+
                     // Add logon session information to InjectedThread object
-                    string domain = Marshal.PtrToStringUni(logonSessionData.LoginDomain.buffer).Trim();
-                    string username = Marshal.PtrToStringUni(logonSessionData.Username.buffer).Trim();
-                    injectedThread.Username = $"{domain}\\{username}";
                     injectedThread.LogonSessionStartTime = DateTime.FromFileTime(logonSessionData.LoginTime);
                     injectedThread.LogonType = Enum.GetName(typeof(SECURITY_LOGON_TYPES), logonSessionData.LogonType);  
                     injectedThread.AuthenticationPackage = Marshal.PtrToStringAuto(logonSessionData.AuthenticationPackage.buffer);
@@ -367,6 +375,34 @@ namespace GetInjectedThreads
 
                 LsaFreeReturnBuffer(pLogonSessionData);
             }
+        }
+
+        /// <summary>
+        /// Gets Domain\Username Owner of a process via its process ID. Uses WMI - requires System.Management.dll
+        /// </summary>
+        /// <param name="processId"></param>
+        /// <returns></returns>
+        static string GetProcessOwner(int processId)
+        {
+            ManagementObjectSearcher searcher = new ManagementObjectSearcher($"Select * From Win32_Process Where ProcessID = {processId}");
+            ManagementObjectCollection processList = searcher.Get();
+
+            foreach(ManagementObject obj in processList)
+            {
+                string[] argList = new string[] { string.Empty, string.Empty };
+                int result = Convert.ToInt32(obj.InvokeMethod("GetOwner", argList));
+                
+                if(result == 0)
+                {
+                    return $"{argList[1]}\\{argList[0]}";
+                }
+            }
+            return "NO OWNER";
+        }
+
+        static void GetThreadBytes(IntPtr hToken)
+        {
+
         }
     }
 }

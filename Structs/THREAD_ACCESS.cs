@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace GetInjectedThreads
+﻿namespace GetInjectedThreads
 {
     public enum ThreadAccess : int
     {

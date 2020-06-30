@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace GetInjectedThreads
 {
@@ -32,7 +33,52 @@ namespace GetInjectedThreads
         public IntPtr BaseAddress { get; set; }
         public int Size { get; set; }
         public byte[] Bytes { get; set; }
-
         public DateTime ThreadStartTime { get; set; }
+
+        public void OutputToConsole()
+        {
+            const string format = "{0,-32} : {1}";
+
+            Console.WriteLine(format, "ProcessName", ProcessName);
+            Console.WriteLine(format, "ProcessId", ProcessID);
+            Console.WriteLine(format, "Path", Path);
+            Console.WriteLine(format, "KernelPath", KernelPath);
+            Console.WriteLine(format, "CommandLine", CommandLine);
+            Console.WriteLine(format, "PathMismatch", PathMismatch);
+            Console.WriteLine(format, "ThreadId", ThreadId);
+            Console.WriteLine(format, "AllocatedMemoryProtection", AllocatedMemoryProtection);
+            Console.WriteLine(format, "MemoryProtection", MemoryProtection);
+            Console.WriteLine(format, "MemoryState", MemoryState);
+            Console.WriteLine(format, "MemoryType", MemoryType);
+            Console.WriteLine(format, "BasePriority", BasePriority);
+            Console.WriteLine(format, "IsUniqueThreadToken", IsUniqueThreadToken);
+            Console.WriteLine(format, "Integrity", Integrity);
+            Console.WriteLine(format, "Privileges", Privileges);
+            Console.WriteLine(format, "LogonId", LogonId);
+            Console.WriteLine(format, "SecurityIdentifier", SecurityIdentifier);
+            Console.WriteLine(format, "Username", Username);
+            Console.WriteLine(format, "LogonSessionStartTime", LogonSessionStartTime);
+            Console.WriteLine(format, "LogonType", LogonType);
+            Console.WriteLine(format, "AuthenticationPackage", AuthenticationPackage);
+            Console.WriteLine(format, "BaseAddress", BaseAddress);
+            Console.WriteLine(format, "Size", Size);
+            Console.WriteLine(format, "Bytes", ByteArrayToString(Bytes));
+        }
+
+        /// <summary>
+        /// Returns first 10 bytes of byte array as a its string representation for nicer output to console
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <returns></returns>
+        private string ByteArrayToString(byte[] bytes)
+        {
+            var stringBuilder = new StringBuilder("{ ");
+            for(int i = 0; i < 10; i++)
+            {
+                stringBuilder.Append(bytes[i] + ", ");
+            }
+            stringBuilder.Append("... }");
+            return stringBuilder.ToString();
+        }
     }
 }

@@ -14,21 +14,27 @@ namespace GetInjectedThreads
     class Program
     {
         // Required Interop functions
-        [DllImport("shell32.dll", SetLastError = true)]
+        [DllImport("Shell32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool IsUserAnAdmin();
 
-        [DllImport("kernel32.dll", SetLastError = true)]
+        [DllImport("Kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(ProcessAccessFlags processAccess, bool bInheritHandle, int processId);
 
         [DllImport("kernel32.dll")]
         public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
+        [DllImport("Kernel32.dll", SetLastError = true)]
         static extern int VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION64 lpBuffer, uint dwLength);
 
         [DllImport("Kernel32.dll")]
         static extern IntPtr OpenThread(ThreadAccess dwDesiredAccess, bool bInheritHandle, int dwThreadId);
+
+        [DllImport("Kernel32.dll")]
+        static extern bool QueryFullProcessImageName(IntPtr hProcess, UInt32 dwFlags, StringBuilder lpExeName, ref int lpdwSize);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr hHandle);
 
         [DllImport("Advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         static extern Boolean OpenThreadToken(IntPtr ThreadHandle, TokenAccessFlags DesiredAccess, bool OpenAsSelf, out IntPtr TokenHandle);
@@ -39,17 +45,18 @@ namespace GetInjectedThreads
         [DllImport("Advapi32.dll")]
         static extern bool GetTokenInformation(IntPtr TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, IntPtr TokenInformation, int TokenInformationLength, out int ReturnLength);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        static extern int NtQueryInformationThread(IntPtr threadHandle, ThreadInfoClass threadInformationClass, IntPtr threadInformation, int threadInformationLength, IntPtr returnLengthPtr);
-
         [DllImport("Advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static extern int ConvertSidToStringSid(IntPtr pSID, out IntPtr ptrSid);
+
+        [DllImport("Ntdll.dll", SetLastError = true)]
+        static extern int NtQueryInformationThread(IntPtr threadHandle, ThreadInfoClass threadInformationClass, IntPtr threadInformation, int threadInformationLength, IntPtr returnLengthPtr);
 
         [DllImport("Secur32.dll")]
         static extern uint LsaGetLogonSessionData(IntPtr pLUID, out IntPtr ppLogonSessionData);
 
         [DllImport("Secur32.dll")]
         private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
+
 
         [HandleProcessCorruptedStateExceptions]
         static void Main(string[] args)
@@ -167,22 +174,37 @@ namespace GetInjectedThreads
                                     GetLogonSessionData(hToken, injectedThread);
                                 }
 
-                                // Read memory from the thread's address space into a byte array
-                                byte[] buffer = new byte[(int)memBasicInfo.RegionSize];
-                                int numberOfBytesRead = 0;
-                                ReadProcessMemory(hProcess, threadBaseAddress, buffer, (int)memBasicInfo.RegionSize, ref numberOfBytesRead);
+                                // Get thread's allocated memory via ReadProcessMemory
+                                injectedThread.Bytes = GetThreadBytes(hProcess, threadBaseAddress, injectedThread.Size);
 
-                                if(numberOfBytesRead > 0)
+                                // Read full name of executable image for the process
+                                int capacity = 1024;
+                                StringBuilder stringBuilder = new StringBuilder(capacity);
+                                QueryFullProcessImageName(hProcess, 0, stringBuilder, ref capacity);
+                                injectedThread.KernelPath = stringBuilder.ToString(0, capacity);
+
+                                // Check whether the kernel image path matches Process.MainModule.Filename
+                                if(injectedThread.Path.ToLower() != injectedThread.KernelPath.ToLower())
                                 {
-                                    injectedThread.Bytes = buffer;;
+                                    injectedThread.PathMismatch = true;
                                 }
 
                                 injectedThreads.Add(injectedThread);
-
+                                CloseHandle(hToken);
                             }
+
+                            CloseHandle(hThread);
                         }
                     }
+
+                    CloseHandle(hProcess);
                 }
+            }
+
+            // Print contents of all injectedThread objects to Console
+            foreach(InjectedThread injectedThread in injectedThreads)
+            {
+                injectedThread.OutputToConsole();
             }
         }    
 
@@ -310,10 +332,7 @@ namespace GetInjectedThreads
                         }
                         else { return null; }
                     }
-                    else
-                    {
-                        return null;
-                    }
+                    else { return null; }
 
                 case TOKEN_INFORMATION_CLASS.TokenOrigin:
 
@@ -400,9 +419,14 @@ namespace GetInjectedThreads
             return "NO OWNER";
         }
 
-        static void GetThreadBytes(IntPtr hToken)
+        static byte[] GetThreadBytes(IntPtr hProcess, IntPtr threadBaseAddress, int threadSize)
         {
+            // Read memory from the thread's address space into a byte array
+            byte[] buffer = new byte[threadSize];
+            int numberOfBytesRead = 0;
+            ReadProcessMemory(hProcess, threadBaseAddress, buffer, threadSize, ref numberOfBytesRead);
 
+            return buffer;
         }
     }
 }

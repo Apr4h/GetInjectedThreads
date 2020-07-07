@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 
+
 namespace GetInjectedThreads
 {
     class Program
@@ -175,7 +176,7 @@ namespace GetInjectedThreads
                                 }
 
                                 // Get thread's allocated memory via ReadProcessMemory
-                                injectedThread.Bytes = GetThreadBytes(hProcess, threadBaseAddress, injectedThread.Size);
+                                injectedThread.ThreadBytes = GetThreadBytes(hProcess, threadBaseAddress, injectedThread.Size);
 
                                 // Read full name of executable image for the process
                                 int capacity = 1024;
@@ -205,6 +206,7 @@ namespace GetInjectedThreads
             foreach(InjectedThread injectedThread in injectedThreads)
             {
                 injectedThread.OutputToConsole();
+                injectedThread.WriteBytesToFile();
             }
         }    
 

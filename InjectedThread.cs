@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
+using System.IO;
 using System.Text;
-using System.Threading;
 
 namespace GetInjectedThreads
 {
@@ -32,13 +29,14 @@ namespace GetInjectedThreads
         public string AuthenticationPackage { get; set; }
         public IntPtr BaseAddress { get; set; }
         public int Size { get; set; }
-        public byte[] Bytes { get; set; }
+        public byte[] ProcessBytes { get; set; }
+        public byte[] ThreadBytes { get; set; }
         public DateTime ThreadStartTime { get; set; }
 
         public void OutputToConsole()
         {
             const string format = "{0,-32} : {1}";
-
+            Console.WriteLine();
             Console.WriteLine(format, "ProcessName", ProcessName);
             Console.WriteLine(format, "ProcessId", ProcessID);
             Console.WriteLine(format, "Path", Path);
@@ -62,7 +60,8 @@ namespace GetInjectedThreads
             Console.WriteLine(format, "AuthenticationPackage", AuthenticationPackage);
             Console.WriteLine(format, "BaseAddress", BaseAddress);
             Console.WriteLine(format, "Size", Size);
-            Console.WriteLine(format, "Bytes", ByteArrayToString(Bytes));
+            Console.WriteLine(format, "Bytes", ByteArrayToString(ThreadBytes));
+            Console.WriteLine();
         }
 
         /// <summary>
@@ -79,6 +78,18 @@ namespace GetInjectedThreads
             }
             stringBuilder.Append("... }");
             return stringBuilder.ToString();
+        }
+
+        /// <summary>
+        /// Write thread's bytes to file in the current working directory. File name includes time of write to file, process id and thread id
+        /// </summary>
+        public void WriteBytesToFile()
+        {
+            string writeTime = DateTime.Now.ToString("yyyy-dd-M--HH-mm-ss");
+            string fileName = $"{writeTime}-proc{this.ProcessID}-thread{ThreadId}.dmp";
+
+            Console.WriteLine($"Writing thread bytes to file: {fileName}");
+            File.WriteAllBytes(fileName, this.ThreadBytes);
         }
     }
 }

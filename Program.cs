@@ -430,7 +430,13 @@ namespace GetInjectedThreads
             return "NO OWNER";
         }
 
-      
+        /// <summary>
+        /// Read all bytes of a thread's allocated memory address via ReadProcessMemory()
+        /// </summary>
+        /// <param name="hProcess"></param>
+        /// <param name="threadBaseAddress"></param>
+        /// <param name="threadSize"></param>
+        /// <returns>A byte[] containing  all bytes of a thread's memory</returns>
         static byte[] GetThreadMemoryBytes(IntPtr hProcess, IntPtr threadBaseAddress, int threadSize)
         {
             // Read memory from the thread's address space into a byte array
@@ -441,9 +447,14 @@ namespace GetInjectedThreads
             return buffer;
         }
 
-
+        /// <summary>
+        /// Search the system's memory space for memory allocated to a target process and retrieve its sections via ReadProcessMemory
+        /// </summary>
+        /// <param name="hProcess"></param>
+        /// <returns>A byte[] containing process's accessible memory</returns>
         static byte[] GetProcessMemoryBytes(IntPtr hProcess)
         {
+            // Get lowest and highest addresses where memory can be allocated for user-mode applications
             SYSTEM_INFO systemInfo;
             GetSystemInfo(out systemInfo);
        
@@ -453,19 +464,28 @@ namespace GetInjectedThreads
             MEMORY_BASIC_INFORMATION64 memBasicInfo = new MEMORY_BASIC_INFORMATION64();
             int bytesRead = 0;
 
+            // Initialise MemoryStream to store all found chunks of memory
             MemoryStream processMemory = new MemoryStream();
 
+            // Iterate over all addressable memory searching for memory blocks belonging to the target process
             while (minimumAddress.ToInt64() < maximumAddress.ToInt64())
             {
+                // Check for memory belonging to target process
                 VirtualQueryEx(hProcess, minimumAddress, out memBasicInfo, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION64)));
 
+                /* Check for sections of memory that are 'readable'. Remove protection checks to dump all committed pages. 
+                *  Shouldn't have access issues if running as admin and handle to process was obtained using ProcessAccessFlags.All.
+                *  Removing protection checks will significantly increase size of memory stream.
+                */
                 if ((memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_READWRITE || 
-                                memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE) && 
+                                memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE) &&
                                 memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT)
                 {
+                    // Write chunk of memory to buffer
                     byte[] buffer = new byte[(int)memBasicInfo.RegionSize];
                     ReadProcessMemory(hProcess, (IntPtr)memBasicInfo.BaseAddress, buffer, (int)memBasicInfo.RegionSize, ref bytesRead);
 
+                    // Append chunk of memory to MemoryStream
                     processMemory.Write(buffer, 0, buffer.Length);
                 }
 

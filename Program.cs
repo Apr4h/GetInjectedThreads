@@ -1,9 +1,12 @@
 ﻿using GetInjectedThreads.Enums;
 using GetInjectedThreads.Structs;
 using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Management;
+using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -22,7 +25,7 @@ namespace GetInjectedThreads
         [DllImport("Kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(ProcessAccessFlags processAccess, bool bInheritHandle, int processId);
 
-        [DllImport("kernel32.dll")]
+        [DllImport("Kernel32.dll")]
         public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
 
         [DllImport("Kernel32.dll", SetLastError = true)]
@@ -34,8 +37,11 @@ namespace GetInjectedThreads
         [DllImport("Kernel32.dll")]
         static extern bool QueryFullProcessImageName(IntPtr hProcess, UInt32 dwFlags, StringBuilder lpExeName, ref int lpdwSize);
 
-        [DllImport("kernel32.dll")]
+        [DllImport("Kernel32.dll")]
         private static extern bool CloseHandle(IntPtr hHandle);
+
+        [DllImport("kernel32.dll")]
+        static extern void GetSystemInfo(out SYSTEM_INFO lpSystemInfo);
 
         [DllImport("Advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         static extern Boolean OpenThreadToken(IntPtr ThreadHandle, TokenAccessFlags DesiredAccess, bool OpenAsSelf, out IntPtr TokenHandle);
@@ -58,7 +64,7 @@ namespace GetInjectedThreads
         [DllImport("Secur32.dll")]
         private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
 
-
+       
         [HandleProcessCorruptedStateExceptions]
         static void Main(string[] args)
         {
@@ -176,7 +182,10 @@ namespace GetInjectedThreads
                                 }
 
                                 // Get thread's allocated memory via ReadProcessMemory
-                                injectedThread.ThreadBytes = GetThreadBytes(hProcess, threadBaseAddress, injectedThread.Size);
+                                injectedThread.ThreadBytes = GetThreadMemoryBytes(hProcess, threadBaseAddress, injectedThread.Size);
+
+                                // Read the full process memory ;
+                                injectedThread.ProcessBytes = GetProcessMemoryBytes(hProcess);
 
                                 // Read full name of executable image for the process
                                 int capacity = 1024;
@@ -421,7 +430,8 @@ namespace GetInjectedThreads
             return "NO OWNER";
         }
 
-        static byte[] GetThreadBytes(IntPtr hProcess, IntPtr threadBaseAddress, int threadSize)
+      
+        static byte[] GetThreadMemoryBytes(IntPtr hProcess, IntPtr threadBaseAddress, int threadSize)
         {
             // Read memory from the thread's address space into a byte array
             byte[] buffer = new byte[threadSize];
@@ -429,6 +439,48 @@ namespace GetInjectedThreads
             ReadProcessMemory(hProcess, threadBaseAddress, buffer, threadSize, ref numberOfBytesRead);
 
             return buffer;
+        }
+
+
+        static byte[] GetProcessMemoryBytes(IntPtr hProcess)
+        {
+            SYSTEM_INFO systemInfo;
+            GetSystemInfo(out systemInfo);
+       
+            IntPtr minimumAddress = systemInfo.minimumApplicationAddress;
+            IntPtr maximumAddress = systemInfo.maximumApplicationAddress;
+
+            MEMORY_BASIC_INFORMATION64 memBasicInfo = new MEMORY_BASIC_INFORMATION64();
+            int bytesRead = 0;
+
+            MemoryStream processMemory = new MemoryStream();
+
+            while (minimumAddress.ToInt64() < maximumAddress.ToInt64())
+            {
+                VirtualQueryEx(hProcess, minimumAddress, out memBasicInfo, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION64)));
+
+                if ((memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_READWRITE || 
+                                memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE) && 
+                                memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT)
+                {
+                    byte[] buffer = new byte[(int)memBasicInfo.RegionSize];
+                    ReadProcessMemory(hProcess, (IntPtr)memBasicInfo.BaseAddress, buffer, (int)memBasicInfo.RegionSize, ref bytesRead);
+
+                    processMemory.Write(buffer, 0, buffer.Length);
+                }
+
+                // Move to the next section of memory
+                try
+                {
+                    minimumAddress = new IntPtr(minimumAddress.ToInt64() + (Int64)memBasicInfo.RegionSize);
+                }
+                catch (OverflowException)
+                {
+                    break;
+                }
+            }
+
+            return processMemory.ToArray();
         }
     }
 }

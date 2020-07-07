@@ -52,6 +52,7 @@
     <Compile Include="Enums\PRIVILEGE_CONSTANTS.cs" />
     <Compile Include="Enums\PROCESS_ACCESS.cs" />
     <Compile Include="Structs\SECURITY_LOGON_SESSION_DATA.cs" />
+    <Compile Include="Structs\SYSTEM_INFO.cs" />
     <Compile Include="Structs\THREAD_ACCESS.cs" />
     <Compile Include="Enums\TOKEN_INFORMATION_CLASS.cs" />
     <Compile Include="Program.cs" />

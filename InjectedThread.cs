@@ -86,10 +86,20 @@ namespace GetInjectedThreads
         public void WriteBytesToFile()
         {
             string writeTime = DateTime.Now.ToString("yyyy-dd-M--HH-mm-ss");
-            string fileName = $"{writeTime}-proc{this.ProcessID}-thread{ThreadId}.dmp";
+            string threadDumpFileName = $"{writeTime}-proc{this.ProcessID}-thread{ThreadId}.dmp";
+            string procDumpFileName = $"{writeTime}-proc{this.ProcessID}.dmp";
 
-            Console.WriteLine($"Writing thread bytes to file: {fileName}");
-            File.WriteAllBytes(fileName, this.ThreadBytes);
+            if (this.ThreadBytes != null)
+            {
+                Console.WriteLine($"Writing thread bytes to file: {threadDumpFileName}");
+                File.WriteAllBytes(threadDumpFileName, this.ThreadBytes);
+            }
+
+            if (this.ProcessBytes != null)
+            {
+                Console.WriteLine($"Writing process bytes to file: {procDumpFileName}");
+                File.WriteAllBytes(procDumpFileName, this.ProcessBytes);
+            }
         }
     }
 }

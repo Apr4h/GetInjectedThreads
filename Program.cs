@@ -216,6 +216,8 @@ namespace GetInjectedThreads
             {
                 injectedThread.OutputToConsole();
                 injectedThread.WriteBytesToFile();
+
+                MalScan.YaraScan(injectedThread.ProcessBytes);
             }
         }    
 

@@ -79,14 +79,18 @@ namespace GetInjectedThreads
                     // Check for scan results and print matches to console 
                     foreach (ScanResult result in results)
                     {
+                        Console.WriteLine($"Match on rule: {result.MatchingRule.Identifier}");
                         foreach (KeyValuePair<string, List<Match>> matches in result.Matches)
                         {
-                            Console.WriteLine($"Found Match {matches.Key}");
+                            
+                            Console.WriteLine($"Found Match {matches.Key} = {matches.Value[0].AsString()}");
+                            /*
                             foreach (Match match in matches.Value)
                             {
                                 Console.WriteLine($"Offset:     {match.Offset}");
                                 Console.WriteLine($"AsString:   {match.AsString()}\n\n");
                             }
+                            */
                         }
                     }
                 }
@@ -101,6 +105,11 @@ namespace GetInjectedThreads
         public static void GetCobaltStrikeConfig(byte[] processBytes, ulong matchOffset)
         {
 
+
+        }
+
+        public static void GetMeterpreterConfig(byte[] processBytes, ulong matchOffset)
+        {
 
         }
 

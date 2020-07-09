@@ -65,7 +65,7 @@ namespace GetInjectedThreads
                         foreach (string rule in YaraRules.meterpreterRules)
                         {
                             compiler.AddRuleString(rule);
-                        }
+                        } 
 
                         compiler.AddRuleString(YaraRules.cobaltStrikeRule);
 

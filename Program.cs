@@ -479,7 +479,8 @@ namespace GetInjectedThreads
                 *  Shouldn't have access issues if running as admin and handle to process was obtained using ProcessAccessFlags.All.
                 *  Removing protection checks will significantly increase size of memory stream.
                 */
-                if (memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE &&  memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT)
+                if ((memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_READWRITE ||  memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE) &&  
+                    memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT)
                 {
                     // Write chunk of memory to buffer
                     byte[] buffer = new byte[(int)memBasicInfo.RegionSize];

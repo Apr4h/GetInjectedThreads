@@ -6,6 +6,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 
+
 namespace GetInjectedThreads
 {
     public static class MalScan
@@ -84,19 +85,23 @@ namespace GetInjectedThreads
                         Console.WriteLine($"Found Match {result.MatchingRule.Identifier}");
 
                         foreach (KeyValuePair<string, List<Match>> matches in result.Matches)
-                        {                          
+                        {
                             Console.WriteLine($"\t{matches.Key}");
                         }
-                        
+
                         if (result.MatchingRule.Identifier.Contains("meterpreter"))
                         {
-                            // Get the c2_block offset
+                            // Check for C2 block and get offset if it exists
                             List<Match> matchList = new List<Match>();
                             result.Matches.TryGetValue("$c2_block", out matchList);
-                            ulong offset = matchList[0].Offset;
-                            Console.WriteLine($"Checking for meterp C2 at offset: {offset}");
-                            
-                            GetMeterpreterConfig(processBytes, matchList[0].Offset);
+
+                            if(matchList.Count > 0)
+                            {
+                                ulong offset = matchList[0].Offset;
+                                Console.WriteLine($"Checking for meterp C2 at offset: {offset}");
+
+                                GetMeterpreterConfig(processBytes, matchList[0].Offset);
+                            }
                         }
                     }
                 }
@@ -125,3 +130,4 @@ namespace GetInjectedThreads
         }
 
     }
+}

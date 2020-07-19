@@ -86,8 +86,6 @@ namespace GetInjectedThreads
                 // PID 0 and PID 4 aren't valid targets for injection
                 if (process.Id != 0 && process.Id != 4)
                 {
-                    // Get all threads under running process
-                    ProcessThreadCollection threadCollection = process.Threads;
                     IntPtr hProcess;
 
                     try
@@ -106,6 +104,8 @@ namespace GetInjectedThreads
                         continue;
                     }
 
+                    // Get all threads under running process
+                    ProcessThreadCollection threadCollection = process.Threads;
 
                     // Iterate over each thread under the process
                     foreach (ProcessThread thread in threadCollection)
@@ -475,13 +475,11 @@ namespace GetInjectedThreads
                 // Check for memory belonging to target process
                 VirtualQueryEx(hProcess, minimumAddress, out memBasicInfo, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION64)));
 
-                /* Check for sections of memory that are 'readable'. Remove protection checks to dump all committed pages. 
+                /* Check for sections of memory that are RWX. Remove protection checks to dump all committed pages. 
                 *  Shouldn't have access issues if running as admin and handle to process was obtained using ProcessAccessFlags.All.
                 *  Removing protection checks will significantly increase size of memory stream.
                 */
-                if ((memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_READWRITE || 
-                                memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE) &&
-                                memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT)
+                if (memBasicInfo.Protect == MemoryBasicInformationProtection.PAGE_EXECUTE_READWRITE &&  memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT)
                 {
                     // Write chunk of memory to buffer
                     byte[] buffer = new byte[(int)memBasicInfo.RegionSize];

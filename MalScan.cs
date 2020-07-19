@@ -2,7 +2,9 @@
 using libyaraNET;
 using System;
 using System.Collections.Generic;
-
+using System.Net;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace GetInjectedThreads
 {
@@ -65,7 +67,7 @@ namespace GetInjectedThreads
                         foreach (string rule in YaraRules.meterpreterRules)
                         {
                             compiler.AddRuleString(rule);
-                        } 
+                        }
 
                         compiler.AddRuleString(YaraRules.cobaltStrikeRule);
 
@@ -76,21 +78,25 @@ namespace GetInjectedThreads
                     Scanner scanner = new Scanner();
                     var results = scanner.ScanMemory(processBytes, rules);
 
-                    // Check for scan results and print matches to console 
+                    // Check for rule matches in process bytes
                     foreach (ScanResult result in results)
                     {
-                        Console.WriteLine($"Match on rule: {result.MatchingRule.Identifier}");
+                        Console.WriteLine($"Found Match {result.MatchingRule.Identifier}");
+
                         foreach (KeyValuePair<string, List<Match>> matches in result.Matches)
+                        {                          
+                            Console.WriteLine($"\t{matches.Key}");
+                        }
+                        
+                        if (result.MatchingRule.Identifier.Contains("meterpreter"))
                         {
+                            // Get the c2_block offset
+                            List<Match> matchList = new List<Match>();
+                            result.Matches.TryGetValue("$c2_block", out matchList);
+                            ulong offset = matchList[0].Offset;
+                            Console.WriteLine($"Checking for meterp C2 at offset: {offset}");
                             
-                            Console.WriteLine($"Found Match {matches.Key} = {matches.Value[0].AsString()}");
-                            /*
-                            foreach (Match match in matches.Value)
-                            {
-                                Console.WriteLine($"Offset:     {match.Offset}");
-                                Console.WriteLine($"AsString:   {match.AsString()}\n\n");
-                            }
-                            */
+                            GetMeterpreterConfig(processBytes, matchList[0].Offset);
                         }
                     }
                 }
@@ -102,16 +108,20 @@ namespace GetInjectedThreads
         }
 
 
-        public static void GetCobaltStrikeConfig(byte[] processBytes, ulong matchOffset)
+        private static void GetCobaltStrikeConfig(byte[] processBytes, ulong c2BlockOffset)
         {
 
 
         }
 
-        public static void GetMeterpreterConfig(byte[] processBytes, ulong matchOffset)
+        private static void GetMeterpreterConfig(byte[] processBytes, ulong c2BlockOffset)
         {
+            Console.WriteLine("Retrieving Meterpreter C2...");
 
+            //42
+            byte[] tmp = new byte[6];
+            Buffer.BlockCopy(processBytes, ((int)c2BlockOffset + 42), tmp, 0, 6);
+            Console.WriteLine(Encoding.UTF8.GetString(tmp));
         }
 
     }
-}

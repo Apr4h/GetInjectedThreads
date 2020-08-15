@@ -7,11 +7,11 @@ namespace GetInjectedThreads.Yara
 
         public static string cobaltStrikeRule = "rule CobaltStrike { " +
                 "strings:  " +
-                    "$v1 = { 73 70 72 6E 67 00} " +
-                    "$v2 = { 69 69 69 69 69 69 69 69} " +
-                    "$c2_block = { 69 68 69 68 69 } " +         // Start of C2 block
+                    "$sprng = { 73 70 72 6E 67 00 } " +
+                    "$config_v3 = { 69 68 69 68 69 6b } " +
+                    "$config_v4 = { 2e 2f 2e 2f 2e 2c } " +
                 "condition: " +
-                    "2 of ($v1, $v2, $c2_block)" +
+                    "$sprng and ($config_v3 or $config_v4)" +
             "}";
 
         public static List<string> meterpreterRules = new List<string>(new string[] {

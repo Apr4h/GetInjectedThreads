@@ -1,9 +1,8 @@
-﻿using GetInjectedThreads.Yara;
+﻿using CobaltStrikeConfigParser;
+using GetInjectedThreads.Yara;
 using libyaraNET;
 using System;
 using System.Collections.Generic;
-using System.Net;
-using System.Runtime.InteropServices;
 using System.Text;
 
 
@@ -11,45 +10,6 @@ namespace GetInjectedThreads
 {
     public static class MalScan
     {
-        private static readonly byte[] pattern = new byte[] { 0x69, 0x68, 0x69, 0x68, 0x69 };
-        private const int configSize = 0x1000;
-
-        // Pattern, name, size for each piece of configuration information
-        private static readonly List<Tuple<byte[], string, int>> configInfo = new List<Tuple<byte[], string, int>> {
-                Tuple.Create(new byte[] { 0x00, 0x01, 0x00, 0x01, 0x00, 0x02 }, "BeaconType\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x02, 0x00, 0x01, 0x00, 0x02 }, "Port\t\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x03, 0x00, 0x02, 0x00, 0x04 }, "Polling(ms)\t\t:", 0x4),
-                Tuple.Create(new byte[] { 0x00, 0x04, 0x00, 0x02, 0x00, 0x04 }, "Unknown1\t\t:", 0x4),
-                Tuple.Create(new byte[] { 0x00, 0x05, 0x00, 0x01, 0x00, 0x02 }, "Jitter\t\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x06, 0x00, 0x01, 0x00, 0x02 }, "Maxdns\t\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x07, 0x00, 0x03, 0x01, 0x00 }, "Unknown2\t\t:", 0x100),
-                Tuple.Create(new byte[] { 0x00, 0x08, 0x00, 0x03, 0x01, 0x00 }, "C2Server\t\t:", 0x100),
-                Tuple.Create(new byte[] { 0x00, 0x09, 0x00, 0x03, 0x00, 0x80 }, "UserAgent\t\t:", 0x80),
-                Tuple.Create(new byte[] { 0x00, 0x0a, 0x00, 0x03, 0x00, 0x40 }, "HTTP_Method2_Path\t:", 0x40),
-                Tuple.Create(new byte[] { 0x00, 0x0b, 0x00, 0x03, 0x01, 0x00 }, "Unknown3\t\t:", 0x100),
-                Tuple.Create(new byte[] { 0x00, 0x0c, 0x00, 0x03, 0x01, 0x00 }, "Header1\t\t\t:", 0x100),
-                Tuple.Create(new byte[] { 0x00, 0x0d, 0x00, 0x03, 0x01, 0x00 }, "Header2\t\t\t:", 0x100),
-                Tuple.Create(new byte[] { 0x00, 0x0e, 0x00, 0x03, 0x00, 0x40 }, "Injection_Process\t:", 0x40),
-                Tuple.Create(new byte[] { 0x00, 0x0f, 0x00, 0x03, 0x00, 0x80 }, "PipeName\t\t:", 0x80),
-                Tuple.Create(new byte[] { 0x00, 0x10, 0x00, 0x01, 0x00, 0x02 }, "Year\t\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x11, 0x00, 0x01, 0x00, 0x02 }, "Month\t\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x12, 0x00, 0x01, 0x00, 0x02 }, "Day\t\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x13, 0x00, 0x02, 0x00, 0x04 }, "DNS_idle\t\t:", 0x4),
-                Tuple.Create(new byte[] { 0x00, 0x14, 0x00, 0x02, 0x00, 0x04 }, "DNS_sleep(ms)\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x1a, 0x00, 0x03, 0x00, 0x10 }, "Method1\t\t\t:", 0x10),
-                Tuple.Create(new byte[] { 0x00, 0x1b, 0x00, 0x03, 0x00, 0x10 }, "Method2\t\t\t:", 0x10),
-                Tuple.Create(new byte[] { 0x00, 0x1c, 0x00, 0x02, 0x00, 0x04 }, "Unknown4\t\t:", 0x4),
-                Tuple.Create(new byte[] { 0x00, 0x1d, 0x00, 0x03, 0x00, 0x40 }, "Spawnto_x86\t\t:", 0x40),
-                Tuple.Create(new byte[] { 0x00, 0x1e, 0x00, 0x03, 0x00, 0x40 }, "Spawnto_x64\t\t:", 0x40),
-                Tuple.Create(new byte[] { 0x00, 0x1f, 0x00, 0x01, 0x00, 0x02 }, "Unknown5\t\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x20, 0x00, 0x03, 0x00, 0x80 }, "Proxy_HostName\t\t:", 0x80),
-                Tuple.Create(new byte[] { 0x00, 0x21, 0x00, 0x03, 0x00, 0x40 }, "Proxy_UserName\t\t:", 0x40),
-                Tuple.Create(new byte[] { 0x00, 0x22, 0x00, 0x03, 0x00, 0x40 }, "Proxy_Password\t\t:", 0x40),
-                Tuple.Create(new byte[] { 0x00, 0x23, 0x00, 0x01, 0x00, 0x02 }, "Proxy_AccessType\t:", 0x2),
-                Tuple.Create(new byte[] { 0x00, 0x24, 0x00, 0x01, 0x00, 0x02 }, "create_remote_thread\t:", 0x2)
-        };
-
-
         /// <summary>
         /// Perform YARA scan on process memory to detect meterpreter or Cobalt Strike payloads.
         /// </summary>
@@ -82,26 +42,47 @@ namespace GetInjectedThreads
                     // Check for rule matches in process bytes
                     foreach (ScanResult result in results)
                     {
-                        Console.WriteLine($"Found Match {result.MatchingRule.Identifier}");
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Found {result.MatchingRule.Identifier}");
+                        Console.ResetColor();
 
                         foreach (KeyValuePair<string, List<Match>> matches in result.Matches)
                         {
-                            Console.WriteLine($"\t{matches.Key}");
+                            Console.WriteLine($"{matches.Key}");
                         }
 
                         if (result.MatchingRule.Identifier.Contains("meterpreter"))
                         {
                             // Check for C2 block and get offset if it exists
-                            List<Match> matchList = new List<Match>();
+                            List<Match> matchList;
                             result.Matches.TryGetValue("$c2_block", out matchList);
 
                             if(matchList.Count > 0)
-                            {
-                                ulong offset = matchList[0].Offset;
-                                Console.WriteLine($"Checking for meterp C2 at offset: {offset}");
-
+                            {                             
                                 GetMeterpreterConfig(processBytes, matchList[0].Offset);
                             }
+                        }
+                        else if (result.MatchingRule.Identifier.Contains("CobaltStrike"))
+                        {
+                            // Check CobaltStrike version
+                            List<Match> matchVersion3;
+                            List<Match> matchVersion4;
+                            result.Matches.TryGetValue("$config_v3", out matchVersion3);
+                            result.Matches.TryGetValue("$config_v4", out matchVersion4);
+
+
+                            if (matchVersion3.Count > 0)
+                            {
+                                ParseCobaltStrikeConfig.GetCobaltStrikeConfig(processBytes, matchVersion3[0].Offset, 3);
+                            }
+                            else if (matchVersion4.Count > 0)
+                            {
+                                ParseCobaltStrikeConfig.GetCobaltStrikeConfig(processBytes, matchVersion4[0].Offset, 4);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Couldn't retrieve C2/Config information for {result.MatchingRule.Identifier}");
                         }
                     }
                 }
@@ -113,21 +94,17 @@ namespace GetInjectedThreads
         }
 
 
-        private static void GetCobaltStrikeConfig(byte[] processBytes, ulong c2BlockOffset)
-        {
-
-
-        }
-
         private static void GetMeterpreterConfig(byte[] processBytes, ulong c2BlockOffset)
         {
             Console.WriteLine("Retrieving Meterpreter C2...");
 
-            //42
-            byte[] tmp = new byte[6];
-            Buffer.BlockCopy(processBytes, ((int)c2BlockOffset + 42), tmp, 0, 6);
-            Console.WriteLine(Encoding.UTF8.GetString(tmp));
-        }
+            // C2 information starts 42 bytes after beginning of C2 block
+            byte[] tmp = new byte[512];
+            Buffer.BlockCopy(processBytes, ((int)c2BlockOffset + 42), tmp, 0, 512);
 
+            // Remove null bytes from unicode strings
+            string c2String = Encoding.UTF8.GetString(tmp).Replace("\0", string.Empty);
+            Console.WriteLine(c2String);
+        }
     }
 }

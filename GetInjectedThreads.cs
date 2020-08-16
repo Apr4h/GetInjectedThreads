@@ -15,7 +15,7 @@ using System.Text;
 
 namespace GetInjectedThreads
 {
-    class Program
+    public class GetInjectedThreads
     {
         // Required Interop functions
         [DllImport("Shell32.dll", SetLastError = true)]
@@ -66,7 +66,7 @@ namespace GetInjectedThreads
 
        
         [HandleProcessCorruptedStateExceptions]
-        static void Main(string[] args)
+        public static List<InjectedThread> InjectedThreads()
         {
             // Check if running as administrator first? Or at least check if SeDebugPrivilege enabled?
             if(IsUserAnAdmin() == false)
@@ -211,14 +211,7 @@ namespace GetInjectedThreads
                 }
             }
 
-            // Print contents of all injectedThread objects to Console
-            foreach(InjectedThread injectedThread in injectedThreads)
-            {
-                injectedThread.OutputToConsole();
-                injectedThread.WriteBytesToFile();
-
-                MalScan.YaraScan(injectedThread.ProcessBytes);
-            }
+            return injectedThreads;
         }    
 
 
@@ -475,7 +468,7 @@ namespace GetInjectedThreads
                 // Check for memory belonging to target process
                 VirtualQueryEx(hProcess, minimumAddress, out memBasicInfo, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION64)));
 
-                /* Check for sections of memory that are RWX. Remove protection checks to dump all committed pages. 
+                /* Check for sections of memory that are RWX or RW. Remove protection checks to dump all committed pages. 
                 *  Shouldn't have access issues if running as admin and handle to process was obtained using ProcessAccessFlags.All.
                 *  Removing protection checks will significantly increase size of memory stream.
                 */

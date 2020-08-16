@@ -5,7 +5,7 @@ using System.Text;
 
 namespace GetInjectedThreads
 {
-    class InjectedThread
+    public class InjectedThread
     {
         public string ProcessName { get; set; }
         public int ProcessID { get; set; }

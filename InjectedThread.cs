@@ -92,7 +92,7 @@ namespace GetInjectedThreads
 
             if (this.ThreadBytes != null)
             {
-                Console.WriteLine($"Writing thread bytes to file: {threadDumpFileName}");
+                Console.WriteLine($"Writing injected thread bytes to file: {threadDumpFileName}");
                 File.WriteAllBytes(threadDumpFileName, this.ThreadBytes);
             }
 

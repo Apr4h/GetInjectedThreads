@@ -114,11 +114,5 @@
   <ItemGroup>
     <None Include="app.config" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\source\repos\CobaltStrikeConfigParser\CobaltStrikeConfigParser.csproj">
-      <Project>{189b01be-f7aa-4ead-aa5f-507dd78272fe}</Project>
-      <Name>CobaltStrikeConfigParser</Name>
-    </ProjectReference>
-  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -445,7 +445,7 @@ namespace GetInjectedThreads
         /// </summary>
         /// <param name="hProcess"></param>
         /// <returns>A byte[] containing process's accessible memory</returns>
-        static byte[] GetProcessMemoryBytes(IntPtr hProcess)
+        public static byte[] GetProcessMemoryBytes(IntPtr hProcess)
         {
             // Get lowest and highest addresses where memory can be allocated for user-mode applications
             SYSTEM_INFO systemInfo;

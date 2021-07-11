@@ -1,6 +1,6 @@
 ﻿namespace GetInjectedThreads.Enums
 {
-    enum TokenAccessFlags : uint
+    public enum TokenAccessFlags : uint
     {
         STANDARD_RIGHTS_REQUIRED = 0x000F0000,
         STANDARD_RIGHTS_READ = 0x00020000,

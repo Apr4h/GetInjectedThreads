@@ -8,61 +8,28 @@ using System.Management;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
-
+using static GetInjectedThreads.DllImports;
 
 
 namespace GetInjectedThreads
 {
     public class GetInjectedThreads
     {
-        // Required Interop functions
-        [DllImport("Shell32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool IsUserAnAdmin();
+        static long kernel32BaseAddress = 0;
+        static long kernel32MaxAddress = 0;
+        static long Wow64Kernel32BaseAddress = 0;
+        static long Wow64Kernel32MaxAddress = 0;
+        public static void Main()
+        {
+            GetKernel32AddressRange();
+            GetWow64Kernel32AddressRange();
+            var injectedThreads = InjectedThreads();
+            foreach (InjectedThread injectedThread in injectedThreads)
+            {
+                injectedThread.OutputToConsole();
+            }
+        }
 
-        [DllImport("Kernel32.dll", SetLastError = true)]
-        public static extern IntPtr OpenProcess(ProcessAccessFlags processAccess, bool bInheritHandle, int processId);
-
-        [DllImport("Kernel32.dll")]
-        public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
-
-        [DllImport("Kernel32.dll", SetLastError = true)]
-        static extern int VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION64 lpBuffer, uint dwLength);
-
-        [DllImport("Kernel32.dll")]
-        static extern IntPtr OpenThread(ThreadAccess dwDesiredAccess, bool bInheritHandle, int dwThreadId);
-
-        [DllImport("Kernel32.dll")]
-        static extern bool QueryFullProcessImageName(IntPtr hProcess, UInt32 dwFlags, StringBuilder lpExeName, ref int lpdwSize);
-
-        [DllImport("Kernel32.dll")]
-        private static extern bool CloseHandle(IntPtr hHandle);
-
-        [DllImport("kernel32.dll")]
-        static extern void GetSystemInfo(out SYSTEM_INFO lpSystemInfo);
-
-        [DllImport("Advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        static extern Boolean OpenThreadToken(IntPtr ThreadHandle, TokenAccessFlags DesiredAccess, bool OpenAsSelf, out IntPtr TokenHandle);
-
-        [DllImport("Advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        static extern Boolean OpenProcessToken(IntPtr ProcessHandle, TokenAccessFlags DesiredAccess, out IntPtr TokenHandle);
-
-        [DllImport("Advapi32.dll")]
-        static extern bool GetTokenInformation(IntPtr TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, IntPtr TokenInformation, int TokenInformationLength, out int ReturnLength);
-
-        [DllImport("Advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        static extern int ConvertSidToStringSid(IntPtr pSID, out IntPtr ptrSid);
-
-        [DllImport("Ntdll.dll", SetLastError = true)]
-        static extern int NtQueryInformationThread(IntPtr threadHandle, ThreadInfoClass threadInformationClass, IntPtr threadInformation, int threadInformationLength, IntPtr returnLengthPtr);
-
-        [DllImport("Secur32.dll")]
-        static extern uint LsaGetLogonSessionData(IntPtr pLUID, out IntPtr ppLogonSessionData);
-
-        [DllImport("Secur32.dll")]
-        private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
-
-       
         [HandleProcessCorruptedStateExceptions]
         public static List<InjectedThread> InjectedThreads()
         {
@@ -84,29 +51,30 @@ namespace GetInjectedThreads
                 // PID 0 and PID 4 aren't valid targets for injection
                 if (process.Id != 0 && process.Id != 4)
                 {
+                    bool isCurrentProcessWow64 = false;
                     IntPtr hProcess;
 
                     try
                     {
+                        IsWow64Process(process.Handle, out isCurrentProcessWow64);
+
                         // Get handle to the process
                         hProcess = OpenProcess(ProcessAccessFlags.All, false, process.Id);
                     }
                     catch (System.ComponentModel.Win32Exception)
                     {
-                        Console.WriteLine($"Couldn't get handle to process: {process.Id} - System.ComponentModel.Win32Exception - Access Is Denied");
+                        Console.WriteLine($"Couldn't get handle to process: {process.ProcessName} {process.Id} - Access Is Denied");
                         continue;
                     }
                     catch (System.InvalidOperationException)
                     {
-                        Console.WriteLine($"Couldn't get handle to process {process.Id} - System.InvalidOperationException - Process has Exited");
+                        Console.WriteLine($"Couldn't get handle to process {process.ProcessName} {process.Id} - Process has Exited");
                         continue;
                     }
 
-                    // Get all threads under running process
-                    ProcessThreadCollection threadCollection = process.Threads;
 
                     // Iterate over each thread under the process
-                    foreach (ProcessThread thread in threadCollection)
+                    foreach (ProcessThread thread in process.Threads)
                     {
                         // Get handle to the thread
                         IntPtr hThread = OpenThread(ThreadAccess.AllAccess, false, thread.Id);
@@ -125,10 +93,30 @@ namespace GetInjectedThreads
                             // Retrieve MEMORY_BASIC_INFORMATION struct for each thread - assumes 64bit processes, otherwise need to use MEMORY_BASIC_INFORMATION32
                             MEMORY_BASIC_INFORMATION64 memBasicInfo = new MEMORY_BASIC_INFORMATION64();
                             VirtualQueryEx(hProcess, threadBaseAddress, out memBasicInfo, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION64)));
+                            
+                            bool isInjectedThread = false;
 
-                            // Check the State and Type fields for the thread's MEMORY_BASIC_INFORMATION
-                            // Resolve to false suggests code running from this thread does not have a corresponding image file on disk, likely code injection
-                            if (memBasicInfo.State == MemoryBasicInformationState.MEM_COMMIT && memBasicInfo.Type != MemoryBasicInformationType.MEM_IMAGE)
+                            // If current process is 32bit, check thread base address against WOW64 version of kernel32
+                            if (isCurrentProcessWow64)
+                            {
+                                if ((long)threadBaseAddress > Wow64Kernel32BaseAddress && (long)threadBaseAddress < Wow64Kernel32MaxAddress)
+                                {
+                                    isInjectedThread = true;
+                                }
+                            }
+                            else
+                            {   
+                                // Check 64bit version of Kernel32
+                                if ((long)threadBaseAddress > kernel32BaseAddress && (long)threadBaseAddress < kernel32MaxAddress)
+                                {
+                                    isInjectedThread = true;
+                                    Console.ForegroundColor = ConsoleColor.Red;
+                                    Console.WriteLine($"Thread Base Address within Kernel32.dll!\n\t{process.ProcessName}\n\tThread Id: {thread.Id}");
+                                    Console.ResetColor();
+                                }
+                            }
+
+                            if (isInjectedThread)
                             {
                                 // Create new InjectedThread object and set initial variables
                                 InjectedThread injectedThread = new InjectedThread()
@@ -241,6 +229,75 @@ namespace GetInjectedThreads
             return commandLine;
         }
 
+        static void GetWow64Kernel32AddressRange()
+        {
+            foreach (Process process in Process.GetProcesses())
+            {
+                try
+                {
+                    // Check if process is WOW64
+                    bool isWow64;
+                    IsWow64Process(process.Handle, out isWow64);
+
+                    // If process is WOW64, Create snapshot, iterate over modules, hopefully can see 32bit modules...
+                    if (isWow64)
+                    {
+                        // Get Snapshot of Process's 32-bit modules
+                        IntPtr hProcessSnapshot = CreateToolhelp32Snapshot(SNAPSHOT_FLAGS.Module | SNAPSHOT_FLAGS.Module32, Convert.ToUInt32(process.Id));
+                        if (hProcessSnapshot != IntPtr.Zero)
+                        {
+
+                            MODULEENTRY32 module = new MODULEENTRY32() { dwSize = (uint)Marshal.SizeOf(typeof(MODULEENTRY32)) };
+                            // Access first process module
+                            if (Module32FirstW(hProcessSnapshot, ref module))
+                            {
+                                // Iterate over each module in the snapshot
+                                do
+                                {
+                                    // Find WOW64 Kernel32.dll and get address range
+                                    if (module.szModule.Equals("KERNEL32.dll"))
+                                    {
+                                        // Get the address range of the dll - no need to check further 
+                                        Wow64Kernel32BaseAddress = (long)module.modBaseAddr;
+                                        Wow64Kernel32MaxAddress = Wow64Kernel32BaseAddress + module.modBaseSize;
+                                        Console.WriteLine($"32 Bit Kernel32 Base Address {Wow64Kernel32BaseAddress}");
+                                        break;
+                                    }
+                                }
+                                while (Module32NextW(hProcessSnapshot, ref module));
+                            }
+                            else
+                            {
+                                // Console.WriteLine(Marshal.GetLastWin32Error());
+                            }
+                        }
+                        break;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+        }
+
+        static void GetKernel32AddressRange()
+        {
+            var currentProcess = Process.GetCurrentProcess();
+
+            // Iterate over each module in the current process looking for Kernel32
+            foreach (ProcessModule processModule in currentProcess.Modules)
+            {
+                if (processModule.ModuleName.Equals("KERNEL32.dll"))
+                {
+                    // Retrieve the base address and in-memory size of kernel32
+                    // Can't use IntPtr.Add() before .NET Framework 4.0, hence casting
+                    kernel32BaseAddress = (long)processModule.BaseAddress;
+                    kernel32MaxAddress = kernel32BaseAddress + (long)processModule.ModuleMemorySize;
+                    Console.WriteLine($"64 Bit Kernel32 Base Address: {kernel32BaseAddress}");
+                }
+            }
+        }
 
         /// <summary>
         /// Extracts Token information from a thread's memory by wrapping GetTokenInformation(). Returns token information specified by the tokenInformationClass param

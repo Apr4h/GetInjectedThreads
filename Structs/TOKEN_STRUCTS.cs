@@ -10,7 +10,7 @@ namespace GetInjectedThreads.Structs
 
 
     [StructLayout(LayoutKind.Sequential)]
-    struct TOKEN_USER
+    public struct TOKEN_USER
     {
         public SID_AND_ATTRIBUTES User;
     }
